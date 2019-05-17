@@ -19,19 +19,51 @@ def sigmoid(x, deriv=False):
     return 1 / (1 + np.exp(-x))
 
 
+def relu(x, deriv=False):
+    """
+    ReLU activation function
+    :param x: input value
+    :param deriv: returns derivative of relu if true
+    :return: Returns either ReLU(x) or the derivative of ReLU(x)
+    """
+    if deriv:
+        return np.exp(x) / ((np.exp(x) + 1) * np.log(10))
+    return np.log10(1 + np.exp(x))
+
+
+class Activation(object):
+    def __init__(self, type):
+        """
+        The activation class contains a string data of the activation name (referred to as type) along with the function
+        itself (referred to as function)
+        :param type: String representation of the name of the activation function
+        """
+        self.type = type
+        if self.type == "SIGMOID":
+            self.function = sigmoid
+        elif self.type == "RELU":
+            self.function = relu
+
+
 class Layer(object):
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, activation=None):
         """
         Layer class, this class holds weights for each layer
         creates weights and biases based on inputs and outputs
         :param input_dim: amount of input neurons
         :param output_dim: amount of output neurons
+        :param activation: string name of the activation function
         """
+
+        if (activation is None):
+            self.activation = Activation("ReLU")
+        else:
+            self.activation = Activation(activation.upper())
 
         self.inputs = input_dim
         self.outputs = output_dim
         self.weight = 2 * np.random.random((input_dim, output_dim)) - 1
-        self.bias = 2 * np.random.random((output_dim)) - 1
+        self.bias = 2 * np.random.random((output_dim,)) - 1
 
     def feedForward(self, inputs):
         """
@@ -39,7 +71,7 @@ class Layer(object):
         :param inputs: layer input
         :return: layer output
         """
-        return sigmoid(np.dot(inputs, self.weight) + self.bias)
+        return self.activation.function(np.dot(inputs, self.weight) + self.bias)
 
 
 class NeuralNetwork(object):
@@ -52,6 +84,16 @@ class NeuralNetwork(object):
         self.layers = []
         self.error = 0
 
+    def addLayer(self, inputs, outputs, activation=None):
+        """
+        add a layer to the neural network
+        :param inputs: input neurons
+        :param outputs: output neurons
+        :param activation: name of activation function, expressed as a string
+        :return: None
+        """
+        self.layers.append(Layer(inputs, outputs, activation))
+
     def feedForward(self, inputs):
         """
         Return neural network output given input.
@@ -62,15 +104,6 @@ class NeuralNetwork(object):
         for l in self.layers:
             res = l.feedForward(res)
         return res
-
-    def addLayer(self, inputs, outputs):
-        """
-        add a layer to the neural network
-        :param inputs: input neurons
-        :param outputs: output neurons
-        :return: None
-        """
-        self.layers.append(Layer(inputs, outputs))
 
     def backPropagate(self, inputs, outputs, alpha=0.1):
         """
@@ -92,7 +125,7 @@ class NeuralNetwork(object):
         # initialize the delta list with the gradient of the last layer in the neural network
         # save the mean squared error of the last layer into the neural network's error variable
         errors = [outputs - layer_outputs[-1]]
-        deltas = [errors[-1] * sigmoid(layer_outputs[-1], deriv=True)]
+        deltas = [errors[-1] * self.layers[-1].activation.function(layer_outputs[-1], deriv=True)]
         self.error = np.mean(errors[0] * errors[0])  # save mean square error
 
         # for every layer in the neural network, starting from last to first:
@@ -100,9 +133,11 @@ class NeuralNetwork(object):
         #   - Using the newly calculated error and the output of the layer, calculate that layer's gradient
         #   - Move back one layer
         layer_index = len(self.layers) - 1
-        while (layer_index > 0):
+        while layer_index > 0:
             errors.append(np.matmul(deltas[-1], self.layers[layer_index].weight.T))
-            deltas.append(errors[-1] * sigmoid(layer_outputs[layer_index], deriv=True))
+            deltas.append(
+                errors[-1] * self.layers[layer_index].activation.function(layer_outputs[layer_index], deriv=True)
+            )
             layer_index -= 1
 
         # for every layer in the neural network, starting from last to first:
